@@ -1,4 +1,7 @@
+mod data;
+
 use rocket::{get, launch, routes};
+use rocket::fs::FileServer;
 
 #[get("/")]
 fn index() -> &'static str {
@@ -7,5 +10,5 @@ fn index() -> &'static str {
 
 #[launch]
 fn rocket() -> _ {
-    rocket::build().mount("/", routes![index])
+    rocket::build().mount("/", FileServer::from("./gacha_front/dist/"))
 }
