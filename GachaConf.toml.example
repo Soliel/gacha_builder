@@ -1,0 +1,2 @@
+[default.databases.gacha_db]
+url = "postgresql://user:pass@location:port/db"

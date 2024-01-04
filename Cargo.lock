@@ -470,8 +470,10 @@ dependencies = [
 name = "gacha_builder"
 version = "0.1.0"
 dependencies = [
+ "figment",
  "rocket",
  "rocket_db_pools",
+ "serde",
 ]
 
 [[package]]
