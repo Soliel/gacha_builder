@@ -1,5 +1,6 @@
 #configs
 GachaConf.toml
+.env
 
 #rust
 /target

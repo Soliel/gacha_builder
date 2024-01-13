@@ -1,2 +1,9 @@
 [default.databases.gacha_db]
 url = "postgresql://user:pass@location:port/db"
+
+[default.oauth.discord]
+client_id = "<id>"
+client_secret = "<secret>"
+auth_url = "<auth_url>"
+token_url = "<token_url>"
+redirect_url = "<redirect_url>"

@@ -1,16 +1,16 @@
 use rocket::serde::{Serialize, Deserialize};
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct GachaConfig {
-    test1: String,
-    testconf: String
+pub struct OauthConfig {
+    pub discord: OauthClientConfig
 }
 
-impl Default for GachaConfig {
-    fn default() -> Self {
-        Self { 
-            test1: String::from("This value is from default!"),
-            testconf: String::from("This value is also from default!")
-        }
-    }
+#[derive(Debug,Deserialize, Serialize)]
+pub struct OauthClientConfig {
+    pub client_id: String,
+    pub client_secret: String,
+    pub auth_url: String,
+    pub token_url: String,
+    pub redirect_url: String,
+    pub revocation_url: String
 }
