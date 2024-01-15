@@ -8,8 +8,9 @@ dashmap = "5.5.3"
 figment = { version = "0.10.13", features = ["toml"] }
 oauth2 = "4.4.2"
 rand = "0.8.5"
-rocket = {version = "0.5.0", features = ["secrets"] }
-rocket_db_pools = { version = "0.1.0", features = ["diesel_postgres"]}
+reqwest = { version = "0.11.23", features = ["json"] }
+rocket = { version = "0.5.0", features = ["secrets"] }
+rocket_db_pools = { version = "0.1.0", features = ["diesel_postgres"] }
 serde = { version = "1.0.194", features = ["derive"] }
 state = "0.6.0"
 uuid = { version = "1.6.1", features = ["v4"] } 
