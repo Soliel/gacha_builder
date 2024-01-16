@@ -4,8 +4,9 @@ mod auth;
 mod session;
 
 use figment::providers::Format;
+use rocket::fairing::AdHoc;
 use rocket::response::Redirect;
-use rocket::{get, routes, State, form};
+use rocket::{get, routes, State};
 use rocket::fs::FileServer;
 use figment::{Figment, Profile, providers::{Toml, Env}};
 use rocket_db_pools::Database;
@@ -15,11 +16,12 @@ use oauth2::{
     CsrfToken, TokenResponse, Scope, PkceCodeChallenge, PkceCodeVerifier, AuthorizationCode 
 };
 use oauth2::reqwest::async_http_client;
-use reqwest::{Client};
+use reqwest::Client;
 
 use config::OauthConfig;
 use data::GachaDb;
-use session::{SessionStorage, SessionWriter, Session};
+use session::storage::SessionStorage;
+use session::{Session, SessionWriter};
 
 #[get("/")]
 fn index() -> String {
@@ -50,7 +52,6 @@ async fn discord_redirect(
     state: String, 
     code: String
 ) -> String {
-    println!("had: {} | received: {}", csrf.secret(), state);
     if !csrf.secret().eq(&state) {
         // Deny
     }
@@ -110,13 +111,20 @@ async fn main() -> Result<(), rocket::Error>  {
     )
     .set_redirect_uri(redirect_url);
 
+    let store_shutdown = AdHoc::on_shutdown("Shutdown Session", |rocket| Box::pin(async move {
+        if let Some(store) = rocket.state::<SessionStorage>(){
+            store.shutdown();
+        }
+    }));
+
     rocket::custom(figment)
         .mount("/api", routes![index])
         .mount("/auth", routes![discord, discord_redirect])
         .mount("/", FileServer::from("./gacha_front/dist/"))
         .attach(GachaDb::init())
-        .attach(SessionStorage::new())
         .manage(client)
+        .manage(SessionStorage::new())
+        .attach(store_shutdown)
         .launch()
         .await?;
 
