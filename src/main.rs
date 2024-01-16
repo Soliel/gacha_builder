@@ -3,85 +3,23 @@ mod config;
 mod auth;
 mod session;
 
+use auth::auth_routes;
 use figment::providers::Format;
 use rocket::fairing::AdHoc;
-use rocket::response::Redirect;
-use rocket::{get, routes, State};
+use rocket::{get, routes};
 use rocket::fs::FileServer;
 use figment::{Figment, Profile, providers::{Toml, Env}};
 use rocket_db_pools::Database;
 use oauth2::basic::BasicClient;
-use oauth2::{
-    AuthUrl, TokenUrl, RedirectUrl, ClientId, ClientSecret, 
-    CsrfToken, TokenResponse, Scope, PkceCodeChallenge, PkceCodeVerifier, AuthorizationCode 
-};
-use oauth2::reqwest::async_http_client;
-use reqwest::Client;
-
+use oauth2::{AuthUrl, TokenUrl, RedirectUrl, ClientId, ClientSecret};
 use config::OauthConfig;
 use data::GachaDb;
 use session::storage::SessionStorage;
-use session::{Session, SessionWriter};
+use session::SessionWriter;
 
 #[get("/")]
 fn index() -> String {
     format!("{:?}", "fightme")
-}
-
-#[get("/discord")]
-async fn discord(oauth: &State<BasicClient>, sess_writer: SessionWriter) -> Redirect {
-    let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
-    let (auth_url, csrf_token) = oauth
-        .authorize_url(CsrfToken::new_random)
-        .add_scope(Scope::new("email".to_string()))
-        .add_scope(Scope::new("identify".to_string()))
-        .set_pkce_challenge(pkce_challenge)
-        .url();
-    println!("{{\n\tauth: {}\n\tpkce: {:?}\n\tcsrf: {:?}\n}}", &auth_url, &pkce_verifier, &csrf_token);
-    sess_writer.insert_session_data(pkce_verifier).await;
-    sess_writer.insert_session_data(csrf_token).await;
-
-    Redirect::to(auth_url.to_string())
-}
-
-#[get("/discord/redirect?<code>&<state>")]
-async fn discord_redirect(
-    client: &State<BasicClient>,
-    csrf: Session<CsrfToken>, 
-    pkce: Session<PkceCodeVerifier>, 
-    state: String, 
-    code: String
-) -> String {
-    if !csrf.secret().eq(&state) {
-        // Deny
-    }
-
-    let code = AuthorizationCode::new(code);
-    let token = client
-        .exchange_code(code)
-        .set_pkce_verifier(PkceCodeVerifier::new(pkce.secret().clone())) //gross but it should work
-        .request_async(async_http_client)
-        .await;
-
-    let token = match token {
-        Ok(val) => val.access_token().secret().to_owned(),
-        Err(e) => return format!("Error: {}", e)
-    };
-
-    let req_client = Client::new();
-    let resp = req_client.get("https://discord.com/api/users/@me")
-        .bearer_auth(token)
-        .send()
-        .await;
-    let resp = match resp {
-        Ok(val) => val.text().await,
-        Err(e) => return format!("Error: {}", e)
-    };
-
-    match resp {
-        Ok(val) => val,
-        Err(e) => format!("Error: {}", e)
-    }
 }
 
 #[rocket::main]
@@ -119,7 +57,7 @@ async fn main() -> Result<(), rocket::Error>  {
 
     rocket::custom(figment)
         .mount("/api", routes![index])
-        .mount("/auth", routes![discord, discord_redirect])
+        .mount("/auth", auth_routes())
         .mount("/", FileServer::from("./gacha_front/dist/"))
         .attach(GachaDb::init())
         .manage(client)
