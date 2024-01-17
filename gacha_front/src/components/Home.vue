@@ -8,8 +8,8 @@ const userStore = useUserStore();
 
 
 onMounted(() => {
-    if (!userStore.isAuthenticated) {
-        router.push('/login')
-    }
 })
 </script>
+<template>
+
+</template>
