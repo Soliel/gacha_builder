@@ -2,6 +2,7 @@ mod data;
 mod config;
 mod auth;
 mod session;
+mod schema;
 
 use auth::auth_routes;
 use figment::providers::Format;
