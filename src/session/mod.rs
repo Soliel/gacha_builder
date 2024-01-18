@@ -63,6 +63,7 @@ impl SessionData {
 impl SessionWriter {
     pub async fn insert_session_data<'b, U: Send + Sync + 'static>(&'b self, val: U) {
         let guard = self.inner.write().await;
+        eprintln!("Inserting value into session");
         guard.type_state.set(Arc::new(val));
     }
 

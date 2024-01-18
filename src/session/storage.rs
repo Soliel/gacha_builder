@@ -72,12 +72,15 @@ impl SessionStorage {
         let sess_data = self.new_session();
         let new_cookie = SessionStorage::build_session_cookie(sess_data.0);
 
+        eprintln!("Made new sessionID: {}", new_cookie.value());
         request.cookies().add_private(new_cookie);
+
         sess_data.1
     }
     
     pub(super) fn get_session_token<'a>(request: &'a Request<'_>) -> Option<String> {
         if let Some(sess_cookie) = request.cookies().get_private(SESSION_COOKIE_NAME) {
+            eprintln!("Found SessionID: {}", sess_cookie.value());
             return Some(sess_cookie.value().to_owned());
         }
 
@@ -101,7 +104,10 @@ impl SessionStorage {
         let session = if let Some(sess_token) = SessionStorage::get_session_token(request) {
             request.local_cache(|| {
                 match store.get_session(&sess_token) {
-                    Some(val) => val,
+                    Some(val) => {
+                        eprintln!("Found storage with ID: {}", sess_token);
+                        val
+                    },
                     None => store.make_new_session(request)
                 }
             })

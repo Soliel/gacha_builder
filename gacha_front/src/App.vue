@@ -5,8 +5,8 @@ import LoginWithDiscord from './components/LoginWithDiscord.vue';
 
 <template>
   <header>
-    <div class="flex w-full bg-zinc-700 border-b border-style-solid border-zinc-900 min-h-12 p-y-5">
-      <LoginWithDiscord class="m-auto justify-self-end"></LoginWithDiscord>
+    <div class="flex justify-end w-full bg-zinc-700 shadow-zinc-950 shadow-md min-h-20">
+      <LoginWithDiscord class=""></LoginWithDiscord>
     </div>
   </header>
 

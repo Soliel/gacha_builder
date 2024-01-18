@@ -7,7 +7,6 @@ import './index.css'
 
 const routes = [
     { path: "/", component: home},
-    { path: "/login", component: () => import('./components/Login.vue') }
 ]
 
 const router = createRouter({

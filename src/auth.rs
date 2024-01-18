@@ -1,11 +1,24 @@
 use oauth2::{basic::BasicClient, PkceCodeChallenge, CsrfToken, Scope, PkceCodeVerifier, AuthorizationCode, reqwest::async_http_client, TokenResponse};
 use reqwest::Client;
-use rocket::{State, get, response::Redirect, Route, routes};
+use rocket::{State, get, response::Redirect, Route, routes, uri, http::uri::{Uri, Origin, self}, serde::{json::Json, self}};
+use ::serde::{Serialize, Deserialize};
 
 use crate::{SessionWriter, session::Session}; 
 
-#[get("/discord")]
-async fn discord(oauth: &State<BasicClient>, sess_writer: SessionWriter) -> Redirect {
+struct ReturnTo(Origin<'static>);
+pub struct DiscordToken(String);
+
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct DiscordUser {
+    id: String,
+    username: String,
+    email: String,
+    avatar: String
+}
+
+#[get("/discord?<returnto>")]
+async fn discord(oauth: &State<BasicClient>, sess_writer: SessionWriter, returnto: Option<&str>) -> Redirect {
     let (pkce_challenge, pkce_verifier) = PkceCodeChallenge::new_random_sha256();
     let (auth_url, csrf_token) = oauth
         .authorize_url(CsrfToken::new_random)
@@ -16,6 +29,11 @@ async fn discord(oauth: &State<BasicClient>, sess_writer: SessionWriter) -> Redi
     println!("{{\n\tauth: {}\n\tpkce: {:?}\n\tcsrf: {:?}\n}}", &auth_url, &pkce_verifier, &csrf_token);
     sess_writer.insert_session_data(pkce_verifier).await;
     sess_writer.insert_session_data(csrf_token).await;
+    if let Some(uri_string) = returnto {
+        if let Ok(origin_uri) = uri::Origin::parse_owned(uri_string.to_owned()) {
+            sess_writer.insert_session_data(ReturnTo(origin_uri)).await;
+        }
+    }
 
     Redirect::to(auth_url.to_string())
 }
@@ -24,12 +42,15 @@ async fn discord(oauth: &State<BasicClient>, sess_writer: SessionWriter) -> Redi
 async fn discord_redirect(
     client: &State<BasicClient>,
     csrf: Session<CsrfToken>, 
-    pkce: Session<PkceCodeVerifier>, 
+    pkce: Session<PkceCodeVerifier>,
+    return_to: Option<Session<ReturnTo>>,
+    sess_writer: SessionWriter,
     state: String, 
     code: String
-) -> String {
+) -> Result<Redirect, &'static str> {
     if !csrf.secret().eq(&state) {
-        // Deny
+        sess_writer.insert_session_data(CsrfToken::new("invalid".to_owned())).await;
+        return Err("CSRF did not match")
     }
 
     let code = AuthorizationCode::new(code);
@@ -41,25 +62,40 @@ async fn discord_redirect(
 
     let token = match token {
         Ok(val) => val.access_token().secret().to_owned(),
-        Err(e) => return format!("Error: {}", e)
+        Err(_) => return Err("Unable to get access token")
     };
 
+    // TODO: Insert auth info into DB
+    sess_writer.insert_session_data(DiscordToken(token)).await;
+    let redirect_origin = match return_to {
+        Some(val) => val.0.to_owned(),
+        None => uri!("/")
+    };
+
+    Ok(Redirect::to(redirect_origin))
+
+
+}
+
+#[get("/discord/me")]
+pub async fn discord_me(token: Session<DiscordToken>) -> Result<Json<DiscordUser>, String> {
     let req_client = Client::new();
     let resp = req_client.get("https://discord.com/api/users/@me")
-        .bearer_auth(token)
+        .bearer_auth(&token.0)
         .send()
         .await;
+
     let resp = match resp {
-        Ok(val) => val.text().await,
-        Err(e) => return format!("Error: {}", e)
+        Ok(val) => val.json::<DiscordUser>().await,
+        Err(e) => return Err(format!("Error: {}", e))
     };
 
     match resp {
-        Ok(val) => val,
-        Err(e) => format!("Error: {}", e)
+        Ok(val) => Ok(Json(val)),
+        Err(e) => return Err(format!("Error: {}", e))
     }
 }
 
 pub fn auth_routes() -> Vec<Route> {
-    routes![discord, discord_redirect]
+    routes![discord, discord_redirect, discord_me]
 }
