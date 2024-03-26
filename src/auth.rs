@@ -1,20 +1,34 @@
+use diesel::upsert::on_constraint;
 use oauth2::{basic::BasicClient, PkceCodeChallenge, CsrfToken, Scope, PkceCodeVerifier, AuthorizationCode, reqwest::async_http_client, TokenResponse};
 use reqwest::Client;
 use rocket::{State, get, response::Redirect, Route, routes, uri, http::uri::{Uri, Origin, self}, serde::{json::Json, self}};
+use rocket_db_pools::Connection;
+use rocket_db_pools::diesel::insert_into;
+use rocket_db_pools::diesel::prelude::*;
 use ::serde::{Serialize, Deserialize};
+use uuid::Uuid;
 
-use crate::{SessionWriter, session::Session}; 
+use crate::{SessionWriter, session::Session, data::{GachaDb, users::{NewUser, MinimalUser}}, schema::{self, discord_users}};
 
 struct ReturnTo(Origin<'static>);
 pub struct DiscordToken(String);
 
+
 #[derive(Serialize, Deserialize)]
 #[serde(crate = "rocket::serde")]
-pub struct DiscordUser {
-    id: String,
-    username: String,
-    email: String,
-    avatar: String
+pub struct DiscordUserInfo {
+    pub id: String,
+    pub username: String,
+    pub email: String,
+    pub avatar: String
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(crate = "rocket::serde")]
+pub struct DiscordOAuth {
+    pub access_token: String,
+    pub refresh_token: String,
+    pub expires_in: i64
 }
 
 #[get("/discord?<returnto>")]
@@ -45,6 +59,7 @@ async fn discord_redirect(
     pkce: Session<PkceCodeVerifier>,
     return_to: Option<Session<ReturnTo>>,
     sess_writer: SessionWriter,
+    mut db: Connection<GachaDb>,
     state: String, 
     code: String
 ) -> Result<Redirect, &'static str> {
@@ -65,7 +80,42 @@ async fn discord_redirect(
         Err(_) => return Err("Unable to get access token")
     };
 
-    // TODO: Insert auth info into DB
+    let discord_info = get_discord_identity(&token).await;
+
+    let user_id = if let Ok(discord_info) = discord_info {
+        use crate::schema::users::dsl::*;
+
+        let ins_result = insert_into(users)
+            .values::<NewUser>((&discord_info).into())
+            .returning(id)
+            .get_result::<Uuid>(&mut db)
+            .await;
+
+        match ins_result {
+            Ok(new_id) => Some(new_id),
+            Err(_) => {
+                let db_user = users
+                    .filter(email.eq(&discord_info.email))
+                    .select(MinimalUser::as_select())
+                    .first(&mut db)
+                    .await;
+
+                match db_user {
+                    Ok(val) => Some(val.id),
+                    Err(_) => None
+                }
+            }
+        }
+    } else {
+        None
+    };
+
+    let user_id = match user_id {
+        Some(val) => val,
+        None => return Err("Unable to get discord info")
+    };
+
+
     sess_writer.insert_session_data(DiscordToken(token)).await;
     let redirect_origin = match return_to {
         Some(val) => val.0.to_owned(),
@@ -73,27 +123,26 @@ async fn discord_redirect(
     };
 
     Ok(Redirect::to(redirect_origin))
-
-
 }
 
 #[get("/discord/me")]
-pub async fn discord_me(token: Session<DiscordToken>) -> Result<Json<DiscordUser>, String> {
+pub async fn discord_me(token: Session<DiscordToken>) -> Result<Json<DiscordUserInfo>, String> {
+    match get_discord_identity(&token.0).await {
+        Ok(val) => Ok(Json(val)),
+        Err(e) => Err(format!("Unable to get discord user info: {}", e))
+    }
+}
+
+pub async fn get_discord_identity(token: &str) -> anyhow::Result<DiscordUserInfo>{
     let req_client = Client::new();
     let resp = req_client.get("https://discord.com/api/users/@me")
-        .bearer_auth(&token.0)
+        .bearer_auth(token)
         .send()
-        .await;
+        .await?;
 
-    let resp = match resp {
-        Ok(val) => val.json::<DiscordUser>().await,
-        Err(e) => return Err(format!("Error: {}", e))
-    };
+    let resp = resp.json::<DiscordUserInfo>().await?;
 
-    match resp {
-        Ok(val) => Ok(Json(val)),
-        Err(e) => return Err(format!("Error: {}", e))
-    }
+    Ok(resp)
 }
 
 pub fn auth_routes() -> Vec<Route> {

@@ -1,9 +1,15 @@
+[default]
+secret_key = "<Secret>"
+port = 8000
+
 [default.databases.gacha_db]
-url = "postgresql://user:pass@location:port/db"
+url = "<DBConnString>"
 
 [default.oauth.discord]
-client_id = "<id>"
-client_secret = "<secret>"
-auth_url = "<auth_url>"
-token_url = "<token_url>"
-redirect_url = "<redirect_url>"
+client_id = "<Discord Client Id>"
+client_secret = "<Discord Client Secret>"
+auth_url = "https://discord.com/oauth2/authorize"
+token_url = "https://discord.com/api/oauth2/token"
+revocation_url = "https://discord.com/api/oauth2/token/revoke"
+redirect_url = "http://localhost:8080"
+token_secret = "<Secret>"

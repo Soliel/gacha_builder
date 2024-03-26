@@ -12,5 +12,6 @@ pub struct OauthClientConfig {
     pub auth_url: String,
     pub token_url: String,
     pub redirect_url: String,
-    pub revocation_url: String
+    pub revocation_url: String,
+    pub token_secret: String
 }
