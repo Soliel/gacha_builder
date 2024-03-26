@@ -31,7 +31,7 @@ async fn main() -> Result<(), rocket::Error>  {
         .select(Profile::from_env_or("GACHA_PROFILE", "default"));
 
     // Setup Oauth client
-    let oauth_config = figment.extract::<OauthConfig>()
+    let oauth_config: OauthConfig = figment.extract_inner("oauth")
         .expect("Unable to launch due to missing Oauth Configuration.");
     let oauth_config = oauth_config.discord;
     
